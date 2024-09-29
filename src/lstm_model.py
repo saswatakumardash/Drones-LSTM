@@ -1,26 +1,74 @@
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Attention
-from tensorflow.keras.optimizers import Adam
+from collections import deque
+import random
 
-def create_lstm_model(input_shape):
-    model = Sequential([
-        LSTM(64, return_sequences=True, input_shape=input_shape),
-        Attention(),
-        LSTM(32),
-        Dense(3)
-    ])
-    model.compile(optimizer=Adam(learning_rate=0.001), loss='mse')
-    return model
+class DQNLSTM:
+    def __init__(self, input_shape, action_size):
+        self.action_size = action_size
+        self.memory = deque(maxlen=2000)  # Experience replay buffer
+        self.gamma = 0.95  # Discount rate
+        self.epsilon = 1.0  # Exploration rate
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.995
+        self.learning_rate = 0.001
+        self.model = self.build_model(input_shape, action_size)
+        self.target_model = self.build_model(input_shape, action_size)
+        self.update_target_model()
 
-def train_model(X, y, epochs=50, batch_size=32):
-    model = create_lstm_model((X.shape[1], X.shape[2]))
-    
-    history = model.fit(
-        X, y,
-        validation_split=0.2,
-        epochs=epochs,
-        batch_size=batch_size
-    )
-    
-    return model, history
+    def build_model(self, input_shape, action_size):
+        """Builds the LSTM model with Attention"""
+        model = Sequential([
+            LSTM(64, return_sequences=True, input_shape=input_shape),
+            Attention(),
+            LSTM(32),
+            Dense(action_size, activation='linear')  # Output is Q-values for each action
+        ])
+        model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=self.learning_rate), loss='mse')
+        return model
+
+    def update_target_model(self):
+        """Copies the weights from the main model to the target model"""
+        self.target_model.set_weights(self.model.get_weights())
+
+    def remember(self, state, action, reward, next_state, done):
+        """Stores experiences in memory"""
+        self.memory.append((state, action, reward, next_state, done))
+
+    def act(self, state):
+        """Chooses an action using epsilon-greedy policy"""
+        if np.random.rand() <= self.epsilon:
+            return np.random.choice(self.action_size)  # Explore: random action
+        q_values = self.model.predict(state)
+        return np.argmax(q_values[0])  # Exploit: choose best action
+
+    def replay(self, batch_size):
+        """Trains the model using randomly sampled experiences from memory"""
+        if len(self.memory) < batch_size:
+            return
+        
+        minibatch = random.sample(self.memory, batch_size)
+        for state, action, reward, next_state, done in minibatch:
+            target = self.model.predict(state)
+            if done:
+                target[0][action] = reward
+            else:
+                next_q = self.target_model.predict(next_state)[0]
+                target[0][action] = reward + self.gamma * np.amax(next_q)
+
+            # Train the model
+            self.model.fit(state, target, epochs=1, verbose=0)
+
+        # Decay exploration rate
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+
+    def load(self, name):
+        """Loads a model from file"""
+        self.model.load_weights(name)
+
+    def save(self, name):
+        """Saves the model to a file"""
+        self.model.save_weights(name)
