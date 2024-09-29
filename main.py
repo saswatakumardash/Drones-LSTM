@@ -1,33 +1,37 @@
-from src.lstm_model import train_model
+from src.lstm_model import DQNLSTM
 from src.airsim_integration import DroneMOAAPP
-from src.data_generation import generate_training_data
 from src.simulation import Simulation
 from config.config import Config
 
 def main():
+    # Load configuration settings
     config = Config()
 
-    # Generate training data
-    print("Generating training data...")
-    X, y = generate_training_data(config.NUM_SAMPLES, config.SEQ_LENGTH)
+    # Initialize Deep Q-Learning with LSTM and Attention model
+    print("Initializing DQN-LSTM model...")
+    action_size = len(config.ACTION_MAP)  # Number of possible actions
+    dqn_lstm_model = DQNLSTM((config.SEQ_LENGTH, 6), action_size)
 
-    # Train the LSTM model
-    print("Training the LSTM model...")
-    trained_model, _ = train_model(X, y, epochs=config.EPOCHS, batch_size=config.BATCH_SIZE)
-
-    # Save the model
-    trained_model.save("moaapp_lstm_model.h5")
-    print("Model saved as 'moaapp_lstm_model.h5'")
-
-    # Initialize simulation
+    # Initialize simulation environment
+    print("Setting up simulation environment...")
     simulation = Simulation(config)
     simulation.setup_environment()
 
-    # Initialize drone
-    drone = DroneMOAAPP(trained_model, config)
+    # Initialize the drone control system (using RL)
+    print("Initializing drone system...")
+    drone = DroneMOAAPP(dqn_lstm_model, config)
 
-    # Run simulation
+    # Run the mission within the simulation
+    print("Running the mission...")
     simulation.run_simulation(drone)
+
+    # After the mission, save the trained model
+    print("Saving trained model...")
+    dqn_lstm_model.save("dqn_lstm_model.h5")
+
+    # Clean up and reset the UAV system
+    drone.cleanup()
+    print("Mission complete, UAV system cleaned up.")
 
 if __name__ == "__main__":
     main()
