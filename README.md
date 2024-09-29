@@ -1,4 +1,4 @@
-# MOAAPP - PATHPLANNER((Multi-Objective Attention-based Adaptive Path Planner)
+# MOAAPP - PATHPLANNER(Multi-Objective Attention-based Adaptive Path Planner)🚀
 
 This project implements a UAV path planning system using LSTM-based neural networks and the AirSim simulator. It combines **Multi-Objective Reinforcement Learning (MORL)** with dynamic attention mechanisms to improve adaptability, efficiency, and safety during UAV navigation in complex environments.
 
